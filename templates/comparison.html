@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Compare recordings - Smart EUG</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+</head><body>
+
+<div class="card">
+  <h3 id="t1">Compare two recordings</h3>
+  <div class="card-sub">Drag two .mat files to see them side-by-side</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+    <div>
+      <label class="upload" id="dz1">
+        <span class="icon" id="ic1"></span>
+        <h3>Recording A</h3>
+        <input type="file" id="f1" accept=".mat,.txt,.csv">
+      </label>
+      <div id="s1" class="alert" style="display:none"></div>
+    </div>
+    <div>
+      <label class="upload" id="dz2">
+        <span class="icon" id="ic2"></span>
+        <h3>Recording B</h3>
+        <input type="file" id="f2" accept=".mat,.txt,.csv">
+      </label>
+      <div id="s2" class="alert" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<div id="results" style="display:none">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div class="card"><h3 id="hA"></h3><div id="vA"></div><div id="kA" class="kpi-grid"></div></div>
+    <div class="card"><h3 id="hB"></h3><div id="vB"></div><div id="kB" class="kpi-grid"></div></div>
+  </div>
+  <div class="card">
+    <h3 id="diffTitle">Feature comparison</h3>
+    <div class="card-sub">Side-by-side feature differences</div>
+    <div id="diffChart" style="min-height:380px"></div>
+  </div>
+</div>
+
+<script src="/static/widgets.js"></script>
+<script>
+mountShell('history');
+document.getElementById('main').insertAdjacentHTML('afterbegin', pageHeader('Compare recordings', 'Side-by-side analysis of two files', 'CLINICAL'));
+document.getElementById('t1').innerHTML = `${icon('layers')} Compare two recordings`;
+document.getElementById('diffTitle').innerHTML = `${icon('trending')} Feature comparison`;
+document.getElementById('ic1').innerHTML = icon('upload');
+document.getElementById('ic2').innerHTML = icon('upload');
+
+let resA = null, resB = null;
+
+function setupZone(dzId, fId, sId, slot){
+  const dz = document.getElementById(dzId), f = document.getElementById(fId);
+  dz.addEventListener('click', () => f.click());
+  ['dragenter','dragover'].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.add('dragover'); }));
+  ['dragleave','drop'].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.remove('dragover'); }));
+  dz.addEventListener('drop', ev => { ev.preventDefault(); if (ev.dataTransfer.files[0]) handleFile(ev.dataTransfer.files[0], sId, slot); });
+  f.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0], sId, slot); });
+}
+
+async function handleFile(file, sId, slot){
+  const sEl = document.getElementById(sId);
+  sEl.style.display = 'block';
+  sEl.className = 'alert alert-info';
+  sEl.innerHTML = `<span class="loading"></span> Analyzing ${file.name}...`;
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const r = await fetch('/api/upload', {method:'POST', body: fd});
+    if (!r.ok) { const eb = await r.json().catch(()=>({})); throw new Error(eb.detail || 'HTTP '+r.status); }
+    const d = await r.json();
+    if (slot === 'A') resA = d.analysis;
+    else resB = d.analysis;
+    sEl.className = 'alert alert-good';
+    sEl.innerHTML = `✓ ${file.name}`;
+    if (resA && resB) renderCompare();
+  } catch(e) {
+    sEl.className = 'alert alert-bad';
+    sEl.innerHTML = `✗ ${e.message}`;
+  }
+}
+
+setupZone('dz1', 'f1', 's1', 'A');
+setupZone('dz2', 'f2', 's2', 'B');
+
+function renderCompare(){
+  document.getElementById('results').style.display = 'block';
+  document.getElementById('hA').innerHTML = `${icon('clipboard')} A: ${resA.filename||'?'}`;
+  document.getElementById('hB').innerHTML = `${icon('clipboard')} B: ${resB.filename||'?'}`;
+  document.getElementById('vA').innerHTML = verdictCard(resA.verdict, resA.verdict_reason);
+  document.getElementById('vB').innerHTML = verdictCard(resB.verdict, resB.verdict_reason);
+  const k = (r) => [
+    kpi('Contractions', r.n_total, '', '', 'activity'),
+    kpi('P(period)', (r.mean_period_probability * 100).toFixed(0)+'%', '', '', 'brain'),
+    kpi('Quality', r.scorecard.score+'/100', '', '', 'award'),
+    kpi('Phase', r.most_likely_phase || '-', '', '', 'heart'),
+  ].join('');
+  document.getElementById('kA').innerHTML = k(resA);
+  document.getElementById('kB').innerHTML = k(resB);
+
+  // Compare per-feature mean values
+  const featuresA = (resA.per_feature_analysis || []).map(f => ({name: f.name, value: f.value}));
+  const featuresB = (resB.per_feature_analysis || []).map(f => ({name: f.name, value: f.value}));
+  const names = featuresA.map(f => f.name);
+
+  Plotly.newPlot('diffChart', [
+    {x: names, y: featuresA.map(f => f.value), type: 'bar', name: 'A', marker:{color:'#ec4899'}},
+    {x: names, y: featuresB.map(f => f.value), type: 'bar', name: 'B', marker:{color:'#8b5cf6'}},
+  ], {
+    height: 380, barmode: 'group',
+    paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: '#fafbfd',
+    yaxis: {gridcolor: '#e9eaf0'}, xaxis: {tickangle: -30, gridcolor: '#e9eaf0'},
+  }, {responsive: true, displaylogo: false});
+}
+</script>
+</body></html>

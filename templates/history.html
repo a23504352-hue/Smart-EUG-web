@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>History - Smart EUG</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+</head><body>
+<div class="card"><h3 id="t1">Recordings history</h3><div class="card-sub">All recordings analyzed</div><div id="tbl">Loading...</div></div>
+<div class="card"><h3 id="t2">Verdict distribution</h3><div id="chart" style="min-height:280px"></div></div>
+<script src="/static/widgets.js"></script>
+<script>
+mountShell('history');
+document.getElementById('main').insertAdjacentHTML('afterbegin', pageHeader('History', 'All past recordings', 'TIMELINE'));
+document.getElementById('t1').innerHTML = `${icon('history')} Recordings history`;
+document.getElementById('t2').innerHTML = `${icon('trending')} Verdict distribution`;
+(async()=>{
+  const r=await fetch('/api/history');const d=await r.json();
+  if(!d.records.length){document.getElementById('tbl').innerHTML='<p style="color:var(--muted);padding:14px;text-align:center">No analyses yet. Go to <a href="/live" style="color:var(--pink-dark)">/live</a> to record.</p>';return;}
+  document.getElementById('tbl').innerHTML=`<table><thead><tr><th>When</th><th>File</th><th>Duration</th><th>Contractions</th><th>P(period)</th><th>Phase</th><th>Verdict</th></tr></thead><tbody>${d.records.map(r=>{const cls=r.verdict==='PERIOD LIKELY'?'period':r.verdict==='NON-PERIOD LIKELY'?'nonperiod':'info';return `<tr><td>${new Date(r.ts).toLocaleString()}</td><td>${r.filename||'?'}</td><td>${r.duration_min?r.duration_min.toFixed(1)+'m':'-'}</td><td>${r.n_total??'-'}</td><td>${r.mean_period_probability!=null?(r.mean_period_probability*100).toFixed(0)+'%':'-'}</td><td>${r.most_likely_phase||'-'}</td><td><span class="badge badge-${cls}">${r.verdict||'?'}</span></td></tr>`;}).join('')}</tbody></table>`;
+  const counts={};d.records.forEach(r=>{const v=r.verdict||'OTHER';counts[v]=(counts[v]||0)+1;});
+  const colors={'PERIOD LIKELY':'#ef4444','NON-PERIOD LIKELY':'#10b981','AMBIGUOUS':'#f59e0b','INCONCLUSIVE':'#9ca3af'};
+  Plotly.newPlot('chart',[{type:'pie',labels:Object.keys(counts),values:Object.values(counts),marker:{colors:Object.keys(counts).map(k=>colors[k]||'#9ca3af')},hole:0.55,textfont:{color:'#fff',size:14}}],{paper_bgcolor:'rgba(0,0,0,0)',height:280,showlegend:true},{responsive:true,displaylogo:false});
+})();
+</script>
+</body></html>

@@ -1,0 +1,39 @@
+============================================================
+  EUG CONTRACTION CLASSIFIER — TRAINING REPORT
+============================================================
+
+Model           : GradientBoosting (n=120, depth=3, lr=0.08)
+Subjects        : 3 (Laiba, Laiba_Tariq, Subject_A)
+Recordings      : 18
+Contractions    : 149 (105 period / 44 non-period)
+Features        : 12
+
+PERFORMANCE
+------------------------------
+AUC (overall)   : 0.9258
+Accuracy        : 0.8389
+Precision       : 0.8716
+Recall          : 0.9048
+F1              : 0.8879
+
+Fold mean ± std : 0.9298 ± 0.0366
+  Fold 1        : AUC = 0.9365
+  Fold 2        : AUC = 0.8942
+  Fold 3        : AUC = 0.9524
+  Fold 4        : AUC = 0.8836
+  Fold 5        : AUC = 0.9821
+
+FEATURE IMPORTANCE
+------------------------------
+ 1. contraction_regularity_cv         0.3499
+ 2. cross_channel_sync                0.2979
+ 3. hr_during_bpm                     0.1108
+ 4. spectral_power_0p1_3hz            0.0637
+ 5. rms_amplitude_uv                  0.0503
+ 6. amplitude_std_uv                  0.0297
+ 7. duration_s                        0.0260
+ 8. peak_amplitude_uv                 0.0217
+ 9. spectral_power_ratio_03_1hz       0.0146
+10. dominant_frequency_hz             0.0134
+11. hr_rise_bpm                       0.0120
+12. peak_to_peak_uv                   0.0100

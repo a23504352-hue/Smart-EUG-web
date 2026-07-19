@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Get started - Smart EUG</title>
+<link rel="stylesheet" href="/static/style.css">
+</head><body>
+<div class="onboarding-step" id="s1">
+  <div class="num">1</div>
+  <h3 id="h1">Plug in your ESP32 to USB</h3>
+  <p>Connect your ESP32-WROOM-32 to your laptop via Micro-USB. The website auto-detects it.</p>
+  <div id="status1" style="font-weight:700;color:var(--muted)">Looking...</div>
+</div>
+<div class="onboarding-step" id="s2">
+  <div class="num">2</div>
+  <h3 id="h2">Place 7 electrodes on your lower abdomen</h3>
+  <p>3 differential pairs (CH1, CH2, CH3) over the lower abdomen + 1 ground reference on the hip bone.</p>
+  <a href="/anatomy" class="btn btn-secondary">${'View 3D guide'}</a>
+</div>
+<div class="onboarding-step" id="s3">
+  <div class="num">3</div>
+  <h3 id="h3">Click Start Recording on the live page</h3>
+  <p>Lie still, breathe normally, record for 5 minutes. AI auto-analyzes after stop.</p>
+  <a href="/live" class="btn">${'Go to live recording'}</a>
+</div>
+<script src="/static/widgets.js"></script>
+<script>
+mountShell('home');
+document.getElementById('main').insertAdjacentHTML('afterbegin', pageHeader('Get started', '3 simple steps to your first recording', 'WELCOME'));
+document.getElementById('h1').innerHTML = `${icon('zap')} Plug in your ESP32 to USB`;
+document.getElementById('h2').innerHTML = `${icon('heart')} Place 7 electrodes on your lower abdomen`;
+document.getElementById('h3').innerHTML = `${icon('play')} Click Start Recording on the live page`;
+async function check(){
+  try{const r=await fetch('/api/esp32/status');const d=await r.json();
+    if(d.connected){document.getElementById('s1').classList.add('done');document.getElementById('status1').innerHTML=`✓ ESP32 connected on ${d.port}`;document.getElementById('status1').style.color='var(--good)';}
+    else{document.getElementById('status1').textContent='Looking for ESP32 on USB...';}
+  }catch(e){}
+}
+check();setInterval(check,2000);
+</script>
+</body></html>

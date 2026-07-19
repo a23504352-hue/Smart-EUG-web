@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Wellness - Smart EUG</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+</head><body>
+<div class="card card-glow">
+  <h3 id="t1">Log how you feel today</h3>
+  <div class="card-sub">Track pain, mood, sleep, water — see your patterns</div>
+  <div class="field"><label>Pain level (0-10)</label>
+    <div style="display:flex;gap:14px;align-items:center"><input type="range" id="pain" min="0" max="10" value="0" style="flex:1;accent-color:var(--pink)"><span id="painVal" style="font-weight:700;background:var(--pink-bg);padding:4px 12px;border-radius:8px;min-width:40px;text-align:center">0</span></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+    <div class="field"><label>Mood</label><select id="mood"><option value="great">Great</option><option value="good">Good</option><option value="neutral" selected>Neutral</option><option value="low">Low</option><option value="anxious">Anxious</option></select></div>
+    <div class="field"><label>Sleep (hrs)</label><input type="number" id="sleep" value="7" min="0" max="14" step="0.5"></div>
+    <div class="field"><label>Water (glasses)</label><input type="number" id="water" value="6" min="0" max="20"></div>
+  </div>
+  <button class="btn" onclick="saveEntry()">${''}</button>
+</div>
+<div class="kpi-grid" id="kpis" style="margin-top:14px"></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+  <div class="card"><h3 id="t2">Pain trend</h3><div id="painChart" style="min-height:240px"></div></div>
+  <div class="card"><h3 id="t3">Mood trend</h3><div id="moodChart" style="min-height:240px"></div></div>
+</div>
+<div class="card"><h3 id="t4">History</h3><div id="hist">No entries yet.</div></div>
+<script src="/static/widgets.js"></script>
+<script>
+mountShell('wellness');
+document.getElementById('main').insertAdjacentHTML('afterbegin', pageHeader('Wellness Tracker', 'Daily log + trend charts', 'TRACKING'));
+document.getElementById('t1').innerHTML = `${icon('heart')} Log how you feel today`;
+document.getElementById('t2').innerHTML = `${icon('trending')} Pain trend (last 14)`;
+document.getElementById('t3').innerHTML = `${icon('brain')} Mood trend`;
+document.getElementById('t4').innerHTML = `${icon('history')} History`;
+document.querySelector('button.btn').innerHTML = `${icon('check')} Save today's entry`;
+const ps = document.getElementById('pain');
+ps.addEventListener('input', ()=>document.getElementById('painVal').textContent=ps.value);
+const KEY='malaika_wellness';
+const MOOD={great:5,good:4,neutral:3,low:2,anxious:1};
+function load(){return JSON.parse(localStorage.getItem(KEY)||'[]');}
+function save(a){localStorage.setItem(KEY, JSON.stringify(a));}
+function saveEntry(){
+  const e={date:new Date().toISOString().slice(0,10),pain:+ps.value,mood:document.getElementById('mood').value,sleep:+document.getElementById('sleep').value,water:+document.getElementById('water').value,ts:Date.now()};
+  const all=load(); all.push(e); save(all); render(); alert('Saved!');
+}
+function render(){
+  const all=load(),recent=all.slice(-14),last7=all.slice(-7);
+  const avg=(arr,k)=>arr.length?(arr.reduce((s,x)=>s+x[k],0)/arr.length).toFixed(1):'-';
+  document.getElementById('kpis').innerHTML=[
+    kpi('Total','#'+all.length,'all entries','','clipboard'),
+    kpi('Avg pain (7d)',avg(last7,'pain'),'',avg(last7,'pain')<3?'good':'','activity'),
+    kpi('Avg sleep',avg(last7,'sleep')+'h','',avg(last7,'sleep')>=7?'good':'bad','moon'),
+    kpi('Avg water',avg(last7,'water'),'glasses/day',avg(last7,'water')>=6?'good':'bad','droplet'),
+  ].join('');
+  if (recent.length){
+    Plotly.newPlot('painChart',[{x:recent.map(e=>e.date),y:recent.map(e=>e.pain),type:'scatter',mode:'lines+markers',line:{color:'#ec4899',width:2.5},marker:{size:9},fill:'tozeroy',fillcolor:'rgba(236,72,153,0.15)'}],{height:240,paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#fafbfd',yaxis:{title:'Pain',range:[0,10]}},{responsive:true,displaylogo:false});
+    Plotly.newPlot('moodChart',[{x:recent.map(e=>e.date),y:recent.map(e=>MOOD[e.mood]||3),type:'scatter',mode:'lines+markers',line:{color:'#8b5cf6',width:2.5},marker:{size:9}}],{height:240,margin:{l:80,r:20,t:24,b:40},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'#fafbfd',yaxis:{title:'Mood',range:[0,6],tickvals:[1,2,3,4,5],ticktext:['Anxious','Low','Neutral','Good','Great']}},{responsive:true,displaylogo:false});
+  }
+  if (all.length){
+    document.getElementById('hist').innerHTML=`<table><thead><tr><th>Date</th><th>Pain</th><th>Mood</th><th>Sleep</th><th>Water</th></tr></thead><tbody>${[...all].reverse().slice(0,30).map(e=>`<tr><td>${e.date}</td><td><strong style="color:${e.pain>=7?'#ef4444':e.pain>=4?'#f59e0b':'#10b981'}">${e.pain}</strong>/10</td><td>${e.mood}</td><td>${e.sleep}h</td><td>${e.water}</td></tr>`).join('')}</tbody></table>`;
+  }
+}
+render();
+</script>
+</body></html>

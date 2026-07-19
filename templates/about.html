@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>About - Smart EUG</title>
+<link rel="stylesheet" href="/static/style.css">
+</head><body>
+<div class="card card-glow"><h3 id="t1">About this project</h3><p style="line-height:1.7;margin-top:8px">A Final Year Project on <strong>uterine health monitoring</strong> using AI. End-to-end pipeline taking raw EUG signals from abdominal electrodes and telling you whether the activity is menstrual — with <strong>0.93 mean fold AUC</strong>.</p></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+<div class="card"><h3 id="t2">For patients</h3><ul style="line-height:1.8;padding-left:20px;margin-top:8px;color:var(--text-soft)">
+<li>1-click ESP32 recording from website</li>
+<li>Real AI chat that answers anything</li>
+<li>14 features × 4 phase thresholds</li>
+<li>Plain-English explanations</li>
+<li>Cycle predictions + wellness tips</li>
+</ul></div>
+<div class="card"><h3 id="t3">For clinicians</h3><ul style="line-height:1.8;padding-left:20px;margin-top:8px;color:var(--text-soft)">
+<li>Per-contraction predictions</li>
+<li>6-check quality scorecard</li>
+<li>Phase voting matrix</li>
+<li>Auto-saves .mat + .csv + .txt</li>
+<li>Printable clinical report</li>
+</ul></div>
+</div>
+<div class="card"><h3 id="t4">Tech stack</h3><ul style="line-height:1.8;padding-left:20px;margin-top:8px;color:var(--text-soft)">
+<li><strong>Backend:</strong> FastAPI · scikit-learn · numpy · scipy</li>
+<li><strong>Frontend:</strong> Vanilla JS · Plotly · Three.js · Canvas</li>
+<li><strong>Hardware:</strong> ESP32-WROOM-32 · 3-channel EUG PCB</li>
+<li><strong>Signal:</strong> 2 kHz · 0.1-3 Hz EUG band</li>
+<li><strong>AI:</strong> GradientBoosting + Ollama LLM (or fallback)</li>
+</ul></div>
+<script src="/static/widgets.js"></script>
+<script>
+mountShell('about');
+document.getElementById('main').insertAdjacentHTML('afterbegin', pageHeader('About', 'A medical AI project for uterine health', 'INFO'));
+document.getElementById('t1').innerHTML = `${icon('info')} About this project`;
+document.getElementById('t2').innerHTML = `${icon('user')} For patients`;
+document.getElementById('t3').innerHTML = `${icon('doctor')} For clinicians`;
+document.getElementById('t4').innerHTML = `${icon('zap')} Tech stack`;
+</script>
+</body></html>

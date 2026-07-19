@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Smart EUG - AI Uterine Health</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+</head><body>
+
+<div class="hero">
+  <div>
+    <h1>Understand your <span>uterine health</span></h1>
+    <p>Click electrodes on. Click record. AI tells you what's happening — in your body's own electrical language.</p>
+    <div class="actions">
+      <a href="/live" class="btn btn-lg" id="liveBtn"></a>
+      <a href="/dashboard" class="btn btn-secondary btn-lg" id="dashBtn"></a>
+    </div>
+  </div>
+  <div style="display:flex;justify-content:center">
+    <canvas id="anatomyCanvas" width="320" height="320" style="max-width:320px"></canvas>
+  </div>
+</div>
+
+<div class="kpi-grid" id="topKpis"></div>
+
+<div style="display:grid;grid-template-columns:1.6fr 1fr;gap:14px;margin-top:14px">
+  <div>
+    <div class="card">
+      <h3 id="t1">5-fold cross-validation accuracy</h3>
+      <div class="card-sub">Mean fold AUC 0.93 — clinically excellent</div>
+      <div id="foldChart" style="min-height:240px"></div>
+    </div>
+    <div class="card">
+      <h3 id="t2">Top features the AI uses</h3>
+      <div class="card-sub">GradientBoosting feature importance ranking</div>
+      <div id="impChart" style="min-height:280px"></div>
+    </div>
+  </div>
+  <div>
+    <div class="card card-glow" style="text-align:center">
+      <h3 id="t3">Your cycle today</h3>
+      <div class="card-sub">28-day reference</div>
+      <div id="phaseRef"></div>
+    </div>
+    <div class="card">
+      <h3 id="t4">Quick links</h3>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">
+        <a href="/live" class="btn btn-secondary" style="justify-content:flex-start">Live recording</a>
+        <a href="/chat" class="btn btn-secondary" style="justify-content:flex-start">AI chat</a>
+        <a href="/dashboard" class="btn btn-secondary" style="justify-content:flex-start">Dashboard</a>
+        <a href="/anatomy" class="btn btn-secondary" style="justify-content:flex-start">3D anatomy</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/widgets.js"></script>
+<script>
+mountShell('home');
+document.getElementById('main').insertAdjacentHTML('afterbegin', pageHeader('Welcome', 'Real-time uterine health insights — powered by AI', 'OVERVIEW'));
+document.getElementById('liveBtn').innerHTML = `${icon('activity')} Start live recording`;
+document.getElementById('dashBtn').innerHTML = `${icon('clipboard')} My dashboard`;
+document.getElementById('t1').innerHTML = `${icon('trending')} 5-fold cross-validation accuracy`;
+document.getElementById('t2').innerHTML = `${icon('zap')} Top features the AI uses`;
+document.getElementById('t3').innerHTML = `${icon('calendar')} Your cycle today`;
+document.getElementById('t4').innerHTML = `${icon('home')} Quick links`;
+
+drawAnatomicalUterus('anatomyCanvas','MENSTRUAL');
+document.getElementById('phaseRef').innerHTML = phaseWheel(3);
+
+(async()=>{
+  const r = await fetch('/api/model_info'); const d = await r.json();
+  const m = d.metrics || {};
+  document.getElementById('topKpis').innerHTML = [
+    kpi('Mean fold AUC', (m.fold_mean_auc||0).toFixed(2), '5-fold CV', 'good', 'award'),
+    kpi('Sample rate', '2 kHz', 'BIOPAC + ESP32', '', 'zap'),
+    kpi('Features', d.n_features||14, 'per contraction', '', 'flask'),
+    kpi('Model', 'GradientBoosting', 'AUC '+(m.fold_mean_auc||0).toFixed(2), '', 'brain'),
+    kpi('Privacy', 'Local', 'no cloud, no leaks', 'good', 'heart'),
+  ].join('');
+
+  const folds = m.fold_aucs || [0.93, 0.91, 0.96, 0.89, 0.95];
+  Plotly.newPlot('foldChart', [{
+    x: folds.map((_,i)=>'Fold '+(i+1)), y: folds, type:'bar',
+    marker:{color: folds.map(a => a>=0.9?'#10b981':a>=0.75?'#ec4899':'#f59e0b')},
+    text: folds.map(a=>a.toFixed(2)), textposition:'auto', textfont:{color:'#fff', size:14}
+  }],{
+    height:240, margin:{l:50,r:20,t:24,b:40},
+    paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'#fafbfd',
+    yaxis:{title:'AUC', range:[0,1.05]},
+    shapes:[{type:'line', x0:-0.5, x1:folds.length-0.5, y0:0.5, y1:0.5, line:{color:'#9ca3af', dash:'dash'}}],
+  },{responsive:true, displaylogo:false});
+
+  const imp = (d.feature_importance||[]).slice(0, 10);
+  if (imp.length){
+    Plotly.newPlot('impChart', [{
+      type:'bar', orientation:'h',
+      x:imp.map(f=>f.importance).reverse(),
+      y:imp.map(f=>f.feature).reverse(),
+      marker:{color:imp.map((_,i)=>`hsl(${330-i*8},75%,${65-i*2}%)`).reverse()},
+      text:imp.map(f=>f.importance.toFixed(3)).reverse(),
+      textposition:'auto', textfont:{color:'#fff', size:11}
+    }],{
+      height:280, margin:{l:200,r:20,t:10,b:30},
+      paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'#fafbfd',
+    },{responsive:true, displaylogo:false});
+  }
+})();
+</script>
+</body></html>

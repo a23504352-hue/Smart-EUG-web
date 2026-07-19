@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dashboard - Smart EUG</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+</head><body>
+
+<div class="card card-glow">
+  <h3 id="t1">Hi! Set up your dashboard</h3>
+  <div class="card-sub">Pick your last period date for personalized insights</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end">
+    <div class="field"><label>Last period start date</label><input type="date" id="lpd"></div>
+    <div class="field"><label>Cycle length (days)</label><input type="number" id="cycleLen" value="28" min="20" max="40"></div>
+    <button class="btn" onclick="updateDashboard()">${''}</button>
+  </div>
+</div>
+
+<div class="kpi-grid" id="kpis"></div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+  <div class="card" style="text-align:center">
+    <h3 id="ringTitle">Health score</h3>
+    <div class="card-sub">Combined wellness rating</div>
+    <div id="ring"></div>
+  </div>
+  <div class="card" style="text-align:center">
+    <h3 id="wheelTitle">Cycle today</h3>
+    <div class="card-sub">28-day reference</div>
+    <div id="wheel"></div>
+  </div>
+</div>
+
+<div class="card">
+  <h3 id="meanTitle">What this means for you</h3>
+  <div id="meaning"></div>
+</div>
+
+<div class="card">
+  <h3 id="wellTitle">Wellness tips for today</h3>
+  <div class="card-sub">Personalized to your cycle phase</div>
+  <div id="tips" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px"></div>
+</div>
+
+<div class="card">
+  <h3 id="affTitle">Daily affirmation</h3>
+  <p id="affirmation" style="font-size:1.1rem;font-style:italic;color:var(--pink-dark);text-align:center;padding:14px"></p>
+</div>
+
+<script src="/static/widgets.js"></script>
+<script>
+mountShell('dashboard');
+document.getElementById('main').insertAdjacentHTML('afterbegin', pageHeader('My dashboard', 'Personalized cycle tracking', 'PATIENT'));
+document.getElementById('t1').innerHTML = `${icon('user')} Hi! Set up your dashboard`;
+document.querySelector('button.btn').innerHTML = `${icon('refresh')} Update`;
+document.getElementById('ringTitle').innerHTML = `${icon('award')} Health score`;
+document.getElementById('wheelTitle').innerHTML = `${icon('calendar')} Cycle today`;
+document.getElementById('meanTitle').innerHTML = `${icon('brain')} What this means for you`;
+document.getElementById('wellTitle').innerHTML = `${icon('heart')} Wellness tips for today`;
+document.getElementById('affTitle').innerHTML = `${icon('zap')} Daily affirmation`;
+
+const def = new Date(); def.setDate(def.getDate()-5);
+document.getElementById('lpd').value = def.toISOString().slice(0,10);
+
+const PHASE_INFO = {
+  MENSTRUAL:{c:'#ef4444', d:'You are on your period (Days 1-5). Your uterus is shedding its lining. Strong rhythmic contractions are normal and healthy.'},
+  FOLLICULAR:{c:'#10b981', d:'Days 6-13. Body preparing to release an egg. Estrogen rising, energy returning. Calm uterine activity.'},
+  OVULATION:{c:'#f59e0b', d:'Day 14. Egg release. Most fertile. Mild cramps possible.'},
+  LUTEAL:{c:'#8b5cf6', d:'Days 15-28. Body preparing for next period. Progesterone rises. PMS may appear.'}
+};
+const TIPS = {
+  MENSTRUAL:[{i:'moon',t:'Extra rest',d:'Aim 8+ hours sleep'},{i:'droplet',t:'Warm water',d:'Helps cramps'},{i:'apple',t:'Iron-rich foods',d:'Spinach, lentils, red meat'},{i:'activity',t:'Gentle yoga',d:'Skip intense workouts'}],
+  FOLLICULAR:[{i:'activity',t:'Push workouts',d:'Energy is rising'},{i:'apple',t:'Fresh greens',d:'Berries support estrogen'},{i:'moon',t:'Steady sleep',d:'Consistent bedtime'},{i:'droplet',t:'2-2.5L water',d:'Glow + energy'}],
+  OVULATION:[{i:'activity',t:'Peak energy day',d:'Try a fitness challenge'},{i:'apple',t:'Antioxidants',d:'Berries, dark chocolate'},{i:'droplet',t:'Extra hydration',d:'Cervical mucus rises'},{i:'moon',t:'Mild cramps OK',d:'Heat pad if needed'}],
+  LUTEAL:[{i:'apple',t:'Magnesium-rich',d:'Almonds, dark chocolate'},{i:'activity',t:'Moderate movement',d:'Walking, swimming'},{i:'moon',t:'Earlier bedtime',d:'Progesterone makes you sleepy'},{i:'droplet',t:'Reduce salt',d:'Less bloating'}]
+};
+const AFFIRMATIONS = [
+  "Your body is doing exactly what it needs to. Trust it.",
+  "Rest is productive. Especially today.",
+  "You know your body better than anyone.",
+  "Soft is also strong.",
+  "Your cycle is your body's wisdom in action.",
+  "You deserve gentleness today.",
+  "Listen to what your body is telling you.",
+  "Hormones, not weakness — and they're temporary."
+];
+
+async function updateDashboard(){
+  const lpd = document.getElementById('lpd').value;
+  const cl = parseInt(document.getElementById('cycleLen').value) || 28;
+  if (!lpd) return;
+  const r = await fetch('/api/cycle_phase?last_period_date='+lpd);
+  const c = await r.json();
+  const cd = c.cycle_day || 1;
+  const phase = c.phase || 'MENSTRUAL';
+
+  document.getElementById('wheel').innerHTML = phaseWheel(cd);
+  // Health score
+  const wellness = JSON.parse(localStorage.getItem('malaika_wellness')||'[]');
+  const last = wellness[wellness.length-1];
+  let score = 60;
+  if (last){ score += Math.min(20, last.sleep*2); score += Math.min(10, last.water*1.2); score -= Math.min(20, last.pain*1.8); }
+  else score = 75;
+  score = Math.round(Math.max(20, Math.min(100, score)));
+  healthRing('ring', score);
+
+  // KPIs
+  const lpdDate = new Date(lpd), today = new Date();
+  const next = new Date(lpdDate); next.setDate(lpdDate.getDate()+cl);
+  while (next < today) next.setDate(next.getDate()+cl);
+  const dUntil = Math.ceil((next-today)/86400000);
+  const ov = new Date(lpdDate); ov.setDate(lpdDate.getDate()+14);
+  while (ov < today) ov.setDate(ov.getDate()+cl);
+  const dOv = Math.ceil((ov-today)/86400000);
+
+  document.getElementById('kpis').innerHTML = [
+    kpi('Cycle day', cd, `Day ${cd} of ${cl}`, '', 'calendar'),
+    kpi('Phase', phase, '', '', 'heart'),
+    kpi('Next period', dUntil+'d', next.toLocaleDateString(undefined,{month:'short',day:'numeric'}), '', 'droplet'),
+    kpi('Next ovulation', dOv+'d', ov.toLocaleDateString(undefined,{month:'short',day:'numeric'}), '', 'sun'),
+    kpi('Health score', score+'/100', score>=80?'Excellent':score>=60?'Good':'Needs care', score>=80?'good':score>=60?'':'bad', 'award'),
+  ].join('');
+
+  // Meaning
+  const m = PHASE_INFO[phase];
+  if (m) document.getElementById('meaning').innerHTML =
+    `<div style="border-left:3px solid ${m.c};padding:12px 16px;background:var(--bg-soft);border-radius:8px">
+      <strong style="color:${m.c};font-size:1rem">${phase} phase</strong>
+      <p style="margin-top:6px;color:var(--text-soft);line-height:1.6">${m.d}</p>
+    </div>`;
+
+  // Tips
+  const tips = TIPS[phase] || [];
+  document.getElementById('tips').innerHTML = tips.map(t=>`
+    <div style="display:flex;gap:12px;align-items:flex-start;padding:14px;border:1px solid var(--border);border-radius:12px">
+      <div style="width:40px;height:40px;border-radius:10px;background:var(--gradient);display:flex;align-items:center;justify-content:center;color:white;flex-shrink:0">${icon(t.i)}</div>
+      <div><strong>${t.t}</strong><div style="color:var(--muted);font-size:.85rem">${t.d}</div></div>
+    </div>`).join('');
+
+  // Affirmation
+  const dayIdx = Math.floor(today.getTime()/86400000) % AFFIRMATIONS.length;
+  document.getElementById('affirmation').textContent = '"' + AFFIRMATIONS[dayIdx] + '"';
+}
+
+updateDashboard();
+</script>
+</body></html>

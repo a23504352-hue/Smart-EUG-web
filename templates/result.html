@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Result - Smart EUG</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+</head><body>
+
+<div id="content"></div>
+
+<script src="/static/widgets.js"></script>
+<script>
+mountShell('live');
+const main = document.getElementById('main');
+main.insertAdjacentHTML('afterbegin', pageHeader('Recording result', 'Verdict + 14 features × 4 phases + AI explanation', 'CLINICAL'));
+
+let analysis = null;
+try { analysis = JSON.parse(sessionStorage.getItem('lastAnalysis')); } catch(e){}
+
+if (!analysis){
+  document.getElementById('content').innerHTML = `
+    <div class="card">
+      <h3>${icon('info')} No recent analysis</h3>
+      <p style="color:var(--muted)">Either you haven't recorded yet, or the result was cleared. Go to <a href="/live" style="color:var(--pink-dark)">/live</a> and record.</p>
+    </div>`;
+} else {
+  render(analysis);
+}
+
+function render(d){
+  const phaseColors = {MENSTRUAL:'#ef4444',FOLLICULAR:'#10b981',OVULATION:'#f59e0b',LUTEAL:'#8b5cf6'};
+  const phaseColor = phaseColors[d.most_likely_phase] || '#9ca3af';
+  document.getElementById('content').innerHTML = `
+    <!-- Verdict + AI explanation -->
+    ${verdictCard(d.verdict, d.verdict_reason)}
+    ${aiExplainCard(d.patient_explanation, d.doctor_explanation)}
+
+    <!-- 2D animated anatomy + phase summary -->
+    <div style="display:grid;grid-template-columns:1fr 1.6fr;gap:14px;margin-bottom:14px">
+      <div class="card" style="text-align:center">
+        <h3 id="anatTitle">Animated uterus state</h3>
+        <div class="card-sub">Reflects detected phase</div>
+        <canvas id="resultAnatomy" style="max-width:300px"></canvas>
+        <div style="margin-top:14px;font-size:1.2rem;font-weight:700;color:${phaseColor}">${d.most_likely_phase}</div>
+      </div>
+      <div class="card">
+        <h3 id="kpiTitle">Recording summary</h3>
+        <div class="card-sub">Quick numbers</div>
+        <div class="kpi-grid" id="kpis"></div>
+      </div>
+    </div>
+
+    <!-- Phase voting -->
+    <div class="card">
+      <h3 id="voteTitle">Phase voting matrix</h3>
+      <div class="card-sub">14 features each vote for a phase. Most votes wins.</div>
+      <div id="phaseVotes" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px"></div>
+    </div>
+
+    <!-- 14 features × 4 phases (the showpiece) -->
+    <div class="card">
+      <h3 id="featTitle">14 features × 4 phase thresholds</h3>
+      <div class="card-sub">Each feature's value vs the 4 cycle phase ranges. Match highlighted.</div>
+      <div class="ai-explain" style="margin-top:12px;margin-bottom:14px">
+        <div class="toggle-view" id="phaseFeatViewToggle">
+          <button class="active" data-view="patient">${icon('user')} Patient view</button>
+          <button data-view="doctor">${icon('doctor')} Doctor view</button>
+        </div>
+      </div>
+      <div id="phaseFeatures"></div>
+    </div>
+
+    <!-- Contraction timeline -->
+    <div class="card">
+      <h3 id="tlTitle">Contraction timeline</h3>
+      <div class="card-sub">Each marker = one detected contraction</div>
+      <div class="legend" style="margin-bottom:8px">
+        <span><span class="sw" style="background:#ef4444"></span>Period</span>
+        <span><span class="sw" style="background:#10b981"></span>Non-period</span>
+      </div>
+      <div id="timeline"></div>
+    </div>
+
+    <!-- Signal viewer -->
+    <div class="card">
+      <h3 id="sigTitle">3-channel signal viewer</h3>
+      <div class="card-sub">Filtered EUG · RMS envelopes · contraction bands</div>
+      <div id="signalChart"></div>
+    </div>
+
+    <!-- Quality scorecard -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div class="card">
+        <h3 id="qcTitle">Quality scorecard</h3>
+        <div class="card-sub">6 clinical checks</div>
+        <div id="scorecard"></div>
+      </div>
+      <div class="card">
+        <h3 id="cTblTitle">Per-contraction table</h3>
+        <div class="card-sub">All contractions with probability</div>
+        <div id="contractionTable" style="max-height:400px;overflow-y:auto"></div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="card" style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+      <button class="btn" onclick="window.print()">${icon('print')} Print report</button>
+      <a href="/live" class="btn btn-secondary">${icon('refresh')} New recording</a>
+      <a href="/dashboard" class="btn btn-secondary">${icon('clipboard')} Dashboard</a>
+      <a href="/chat" class="btn btn-secondary">${icon('message')} Ask AI about this</a>
+    </div>`;
+
+  // Set icon-headers
+  document.getElementById('anatTitle').innerHTML = `${icon('heart')} Animated uterus state`;
+  document.getElementById('kpiTitle').innerHTML = `${icon('clipboard')} Recording summary`;
+  document.getElementById('voteTitle').innerHTML = `${icon('award')} Phase voting matrix`;
+  document.getElementById('featTitle').innerHTML = `${icon('zap')} 14 features × 4 phase thresholds`;
+  document.getElementById('tlTitle').innerHTML = `${icon('history')} Contraction timeline`;
+  document.getElementById('sigTitle').innerHTML = `${icon('activity')} 3-channel signal viewer`;
+  document.getElementById('qcTitle').innerHTML = `${icon('check')} Quality scorecard`;
+  document.getElementById('cTblTitle').innerHTML = `${icon('clipboard')} Per-contraction table`;
+
+  // Anatomy
+  drawAnatomicalUterus('resultAnatomy', d.most_likely_phase || 'MENSTRUAL');
+
+  // KPIs
+  document.getElementById('kpis').innerHTML = [
+    kpi('Verdict', d.verdict, '', '', 'award'),
+    kpi('Phase', d.most_likely_phase || 'UNKNOWN', '', '', 'heart'),
+    kpi('Contractions', d.n_total, d.duration_min + ' min', '', 'activity'),
+    kpi('P(period)', (d.mean_period_probability*100).toFixed(0)+'%', '', '', 'brain'),
+    kpi('Quality', d.scorecard.score+'/100', `${d.scorecard.n_pass} pass · ${d.scorecard.n_warn} warn`, '', 'check'),
+  ].join('');
+
+  // Phase votes
+  const votes = d.phase_votes || {};
+  document.getElementById('phaseVotes').innerHTML = ['MENSTRUAL','FOLLICULAR','OVULATION','LUTEAL'].map(p=>{
+    const c = phaseColors[p];
+    const v = votes[p] || 0;
+    const total = Object.values(votes).reduce((a,b)=>a+b,0) || 1;
+    const pct = (v/total*100).toFixed(0);
+    return `<div style="padding:14px;border-radius:12px;background:${c}22;border:2px solid ${c};text-align:center">
+      <div style="font-size:.7rem;color:${c};font-weight:700;letter-spacing:1px">${p}</div>
+      <div style="font-size:1.8rem;font-weight:800;color:${c};margin:4px 0">${v}</div>
+      <div style="font-size:.78rem;color:var(--muted)">${pct}% of votes</div>
+    </div>`;
+  }).join('');
+
+  // Setup AI view toggle
+  setupAiViewToggle();
+
+  // 14 features × 4 phases
+  renderPhaseFeatures('phaseFeatures', d.per_feature_analysis, 'patient');
+  // bind toggle for phase features
+  const tg = document.getElementById('phaseFeatViewToggle');
+  if (tg){
+    tg.addEventListener('click', e=>{
+      const btn = e.target.closest('button[data-view]'); if (!btn) return;
+      tg.querySelectorAll('button').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      renderPhaseFeatures('phaseFeatures', d.per_feature_analysis, btn.dataset.view);
+    });
+  }
+
+  // Timeline
+  document.getElementById('timeline').innerHTML = timelineStrip(d.signal.duration_sec, d.signal.contractions);
+
+  // Signal plot
+  const traces = [];
+  const cols = ['#ec4899', '#8b5cf6', '#06b6d4'];
+  const chans = Object.keys(d.signal.channels);
+  chans.forEach((ch, i) => {
+    traces.push({x: d.signal.time, y: d.signal.channels[ch], type:'scatter', mode:'lines',
+      name: ch + ' signal', line:{color: cols[i%3], width: 0.7},
+      xaxis:'x', yaxis:'y'+(i+1)});
+  });
+  // RMS envelope at bottom
+  chans.forEach((ch, i) => {
+    if (!d.signal.rms_envelopes[ch]) return;
+    traces.push({x: d.signal.time, y: d.signal.rms_envelopes[ch], type:'scatter', mode:'lines',
+      name: ch + ' env', line:{color: cols[i%3], width: 1.6},
+      xaxis:'x', yaxis:'y'+(chans.length+1)});
+  });
+  const shapes = (d.signal.contractions||[]).map(c => {
+    return chans.map((_, i) => ({
+      type:'rect', xref:'x', yref:'y'+(i+1)+' domain',
+      x0:c.start_sec, x1:c.end_sec, y0:0, y1:1,
+      fillcolor: c.prediction==='PERIOD'?'rgba(239,68,68,0.16)':'rgba(16,185,129,0.16)',
+      line:{width:0}}));
+  }).flat();
+  const totalRows = chans.length + 1;
+  const layout = {
+    height: 420 + chans.length * 60,
+    margin:{l:60,r:20,t:20,b:50},
+    paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'#fafbfd',
+    showlegend:false,
+    grid:{rows: totalRows, columns:1, pattern:'independent'},
+    shapes,
+  };
+  for (let i = 1; i <= chans.length; i++){
+    const top = 1 - (i-1)/totalRows, bot = 1 - i/totalRows + 0.04;
+    layout['yaxis'+i] = {title: 'CH'+i, domain:[bot, top-0.01], gridcolor:'#e9eaf0'};
+  }
+  layout['yaxis'+(chans.length+1)] = {title:'RMS', domain:[0, 1 - chans.length/totalRows - 0.01], gridcolor:'#e9eaf0'};
+  layout.xaxis = {title:'Time (s)', anchor:'y'+(chans.length+1), gridcolor:'#e9eaf0'};
+  Plotly.newPlot('signalChart', traces, layout, {responsive:true, displaylogo:false});
+
+  // Quality scorecard
+  renderScorecard('scorecard', d.scorecard);
+
+  // Per-contraction table
+  if (d.contractions && d.contractions.length){
+    document.getElementById('contractionTable').innerHTML = `
+      <table style="font-size:.82rem">
+        <thead><tr><th>#</th><th>Time</th><th>Dur</th><th>Peak (µV)</th><th>P</th><th>Class</th></tr></thead>
+        <tbody>
+        ${d.contractions.map((c,i)=>`<tr>
+          <td>${i+1}</td>
+          <td>${c._start_s.toFixed(1)}-${c._end_s.toFixed(1)}s</td>
+          <td>${c.duration_s.toFixed(1)}</td>
+          <td>${c.peak_amplitude_uv.toFixed(0)}</td>
+          <td>${(c.period_probability*100).toFixed(0)}%</td>
+          <td><span class="badge badge-${c.prediction==='PERIOD'?'period':'nonperiod'}">${c.prediction}</span></td>
+        </tr>`).join('')}
+        </tbody>
+      </table>`;
+  } else {
+    document.getElementById('contractionTable').innerHTML = '<p style="color:var(--muted);padding:14px">No contractions detected.</p>';
+  }
+}
+</script>
+</body></html>

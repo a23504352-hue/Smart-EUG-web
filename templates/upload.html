@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Upload Recording - Smart EUG</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+.upload-zone{border:2px dashed var(--border-strong);border-radius:14px;padding:50px 30px;
+  text-align:center;cursor:pointer;background:var(--panel);transition:all .2s}
+.upload-zone:hover, .upload-zone.dragover{border-color:var(--pink);background:var(--pink-bg)}
+.upload-zone .icon-big{width:64px;height:64px;margin:0 auto 14px;background:var(--gradient);
+  border-radius:50%;display:flex;align-items:center;justify-content:center;color:white}
+.upload-zone .icon-big svg{width:32px;height:32px}
+.upload-zone h3{justify-content:center;font-size:1.2rem;margin-bottom:8px}
+.upload-zone input{display:none}
+.fmt-badge{display:inline-block;padding:4px 12px;background:var(--pink-bg);color:var(--pink-dark);
+  border-radius:999px;font-size:.78rem;font-weight:700;margin:0 4px}
+</style>
+</head><body>
+
+<div class="card">
+  <h3 id="t1">Upload a recording</h3>
+  <div class="card-sub">Have an existing .mat, .txt, or .csv file? Upload it to analyze.</div>
+  <label class="upload-zone" id="dropzone">
+    <span class="icon-big" id="upIcon"></span>
+    <h3 id="upH">Drag & drop your file here</h3>
+    <p style="color:var(--muted);margin-top:6px">or click to browse</p>
+    <p style="color:var(--muted);font-size:.85rem;margin-top:14px">
+      Supported formats:
+      <span class="fmt-badge">.mat</span>
+      <span class="fmt-badge">.txt</span>
+      <span class="fmt-badge">.csv</span>
+    </p>
+    <input type="file" id="fileInput" accept=".mat,.txt,.csv">
+  </label>
+  <div id="status" class="alert" style="display:none"></div>
+</div>
+
+<div class="card">
+  <h3 id="t2">What gets analyzed</h3>
+  <div class="card-sub">Same pipeline as live recording</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px">
+    <div style="padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--bg-soft)">
+      <strong>1. Signal processing</strong>
+      <p style="color:var(--muted);font-size:.85rem;margin-top:4px">50 Hz notch + 0.1-3 Hz bandpass</p>
+    </div>
+    <div style="padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--bg-soft)">
+      <strong>2. Contraction detection</strong>
+      <p style="color:var(--muted);font-size:.85rem;margin-top:4px">Adaptive threshold + 2/3 channel consensus</p>
+    </div>
+    <div style="padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--bg-soft)">
+      <strong>3. 14 features extracted</strong>
+      <p style="color:var(--muted);font-size:.85rem;margin-top:4px">Per contraction</p>
+    </div>
+    <div style="padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--bg-soft)">
+      <strong>4. AI verdict</strong>
+      <p style="color:var(--muted);font-size:.85rem;margin-top:4px">GradientBoosting + 4-phase thresholds</p>
+    </div>
+  </div>
+</div>
+
+<script src="/static/widgets.js"></script>
+<script>
+mountShell('home');
+document.getElementById('main').insertAdjacentHTML('afterbegin', pageHeader('Upload recording', 'Analyze any saved EUG file', 'CLINICAL'));
+document.getElementById('t1').innerHTML = `${icon('upload')} Upload a recording`;
+document.getElementById('t2').innerHTML = `${icon('zap')} What gets analyzed`;
+document.getElementById('upIcon').innerHTML = icon('upload');
+
+const dz = document.getElementById('dropzone'), fi = document.getElementById('fileInput'), st = document.getElementById('status');
+dz.addEventListener('click', () => fi.click());
+['dragenter','dragover'].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.add('dragover'); }));
+['dragleave','drop'].forEach(e => dz.addEventListener(e, ev => { ev.preventDefault(); dz.classList.remove('dragover'); }));
+dz.addEventListener('drop', ev => { ev.preventDefault(); if (ev.dataTransfer.files[0]) handle(ev.dataTransfer.files[0]); });
+fi.addEventListener('change', e => { if (e.target.files[0]) handle(e.target.files[0]); });
+
+function setStatus(msg, cls){ st.style.display='block'; st.className='alert '+cls; st.innerHTML=msg; }
+
+async function handle(file){
+  setStatus(`<span class="loading"></span> Analyzing "${file.name}" (${(file.size/1024/1024).toFixed(1)} MB) — about 5 seconds...`, 'alert-info');
+  const fd = new FormData(); fd.append('file', file);
+  try {
+    const r = await fetch('/api/upload', {method:'POST', body: fd});
+    if (!r.ok) { const eb = await r.json().catch(()=>({})); throw new Error(eb.detail || 'HTTP '+r.status); }
+    const d = await r.json();
+    if (!d.analysis) throw new Error('No analysis returned');
+    setStatus(`✓ Analyzed "${d.filename}". Redirecting to result...`, 'alert-good');
+    sessionStorage.setItem('lastAnalysis', JSON.stringify(d.analysis));
+    setTimeout(() => location.href = '/result', 800);
+  } catch(e) {
+    setStatus(`✗ ${e.message}`, 'alert-bad');
+    console.error(e);
+  }
+}
+</script>
+</body></html>

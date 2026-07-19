@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>3D Anatomy - Smart EUG</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+.anat-controls{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:14px}
+@media(max-width:900px){.anat-controls{grid-template-columns:1fr}}
+.ctrl-group{padding:14px;border-radius:12px;background:var(--panel);border:1px solid var(--border)}
+.ctrl-group h4{font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:8px}
+.btn-row{display:flex;gap:6px;flex-wrap:wrap}
+.btn-row .btn{padding:8px 14px;font-size:.82rem;flex:1;min-width:auto}
+.btn-row .btn.active{box-shadow:0 0 0 3px rgba(236,72,153,0.4)}
+.cycle-progress{height:36px;background:linear-gradient(90deg,#ef4444 0%,#ef4444 18%,#10b981 18%,#10b981 46%,#f59e0b 46%,#f59e0b 50%,#8b5cf6 50%,#8b5cf6 100%);border-radius:8px;position:relative;margin-top:10px;overflow:hidden}
+.cycle-marker{position:absolute;top:-4px;width:6px;height:44px;background:#1f2937;border-radius:3px;transition:left .2s}
+.cycle-day-info{display:flex;justify-content:space-between;font-size:.85rem;margin-top:8px}
+.phase-badge{display:inline-block;padding:6px 14px;border-radius:999px;font-weight:700;font-size:.85rem;margin-left:8px}
+.anat-loading{display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-weight:600}
+</style>
+</head><body>
+
+<div class="card">
+  <h3 id="t1">3D anatomical uterus + cycle visualization</h3>
+  <div class="card-sub">Real anatomy · drag to rotate · scroll to zoom · watch a full 28-day cycle in 30 sec</div>
+  <div id="anat3d" style="height:500px;background:radial-gradient(ellipse at center,#fdf2f8 0%,#fafbfd 70%);border-radius:14px;cursor:grab;position:relative">
+    <div class="anat-loading" id="anatLoading">Loading 3D model...</div>
+  </div>
+</div>
+
+<div class="anat-controls">
+  <div class="ctrl-group">
+    <h4>Cycle phase</h4>
+    <div class="btn-row" id="phaseBtns">
+      <button class="btn" data-phase="MENSTRUAL" style="background:linear-gradient(135deg,#ef4444,#dc2626)">Menstrual</button>
+      <button class="btn" data-phase="FOLLICULAR" style="background:linear-gradient(135deg,#10b981,#059669)">Follicular</button>
+      <button class="btn" data-phase="OVULATION" style="background:linear-gradient(135deg,#f59e0b,#d97706)">Ovulation</button>
+      <button class="btn" data-phase="LUTEAL" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed)">Luteal</button>
+    </div>
+  </div>
+  <div class="ctrl-group">
+    <h4>Menstruation visualization</h4>
+    <div class="btn-row" id="vizBtns">
+      <button class="btn btn-secondary" data-viz="SUBTLE">Subtle</button>
+      <button class="btn btn-secondary" data-viz="REALISTIC">Realistic</button>
+      <button class="btn btn-secondary" data-viz="EDUCATIONAL">Educational</button>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h3 id="cycleTitle">Watch a full 28-day cycle</h3>
+  <div class="card-sub">30-second loop showing all 4 phases with anatomical changes</div>
+  <div style="display:flex;gap:10px;align-items:center;margin-top:8px">
+    <button class="btn" id="playBtn">Play cycle</button>
+    <button class="btn btn-secondary" id="pauseBtn" style="display:none">Pause</button>
+    <div style="flex:1">
+      <div class="cycle-day-info">
+        <span style="color:var(--muted)">Day <strong id="curDay">1</strong> of 28</span>
+        <span class="phase-badge" id="curPhase" style="background:#ef4444;color:white">MENSTRUAL</span>
+      </div>
+      <div class="cycle-progress"><div class="cycle-marker" id="cycleMarker" style="left:0%"></div></div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px;font-size:.78rem;color:var(--muted);text-align:center">
+    <div><strong style="color:#ef4444">Days 1-5</strong><br>Menstrual</div>
+    <div><strong style="color:#10b981">Days 6-13</strong><br>Follicular</div>
+    <div><strong style="color:#f59e0b">Day 14</strong><br>Ovulation</div>
+    <div><strong style="color:#8b5cf6">Days 15-28</strong><br>Luteal</div>
+  </div>
+</div>
+
+<div class="card">
+  <h3 id="guideTitle">What you're seeing</h3>
+  <ul style="line-height:2;padding-left:20px;margin-top:8px;color:var(--text-soft)">
+    <li><strong>Uterus body</strong> (pear-shaped semi-transparent outer) — the muscle layer that contracts during menstruation</li>
+    <li><strong>Endometrium</strong> (red inner layer) — the lining that thickens during follicular/luteal and sheds during your period. Watch it shrink when you click "Menstrual".</li>
+    <li><strong>Fallopian tubes</strong> — the egg travels through these from ovary to uterus over ~5 days</li>
+    <li><strong>Ovaries</strong> (pink spheres) — produce eggs and hormones. During ovulation, one follicle glows yellow as the egg is released.</li>
+    <li><strong>Cervix + vaginal canal</strong> — the path menstrual blood takes out of the body</li>
+  </ul>
+</div>
+
+<!-- Scripts loaded at the END so DOM is ready -->
+<script src="/static/widgets.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+<script src="/static/anatomy_3d.js"></script>
+<script>
+mountShell('anatomy');
+document.getElementById('main').insertAdjacentHTML('afterbegin', pageHeader('3D Anatomy', 'Real anatomical model with animated menstrual cycle', 'EDUCATION'));
+document.getElementById('t1').innerHTML = icon('heart') + ' 3D anatomical uterus + cycle visualization';
+document.getElementById('cycleTitle').innerHTML = icon('play') + ' Watch a full 28-day cycle';
+document.getElementById('guideTitle').innerHTML = icon('info') + " What you're seeing";
+
+let anat = null;
+function startAnat(retries){
+  retries = retries || 0;
+  if (!window.THREE){
+    if (retries < 30){ setTimeout(function(){ startAnat(retries+1); }, 200); }
+    else { document.getElementById('anatLoading').textContent = 'Three.js failed to load. Check internet.'; }
+    return;
+  }
+  if (typeof AnatomyUterus === 'undefined'){
+    if (retries < 30){ setTimeout(function(){ startAnat(retries+1); }, 200); }
+    else { document.getElementById('anatLoading').textContent = 'Anatomy script not loaded.'; }
+    return;
+  }
+  document.getElementById('anatLoading').style.display = 'none';
+  anat = new AnatomyUterus('anat3d', {height:500, phase:'MENSTRUAL', vizMode:'SUBTLE'});
+  anat.applyPhaseVisuals();
+
+  // Wire up buttons
+  document.querySelectorAll('#phaseBtns button').forEach(function(btn){
+    btn.onclick = function(){
+      document.querySelectorAll('#phaseBtns button').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      anat.setPhase(btn.dataset.phase);
+      anat.stopCycleAnimation();
+      document.getElementById('playBtn').style.display = 'inline-flex';
+      document.getElementById('pauseBtn').style.display = 'none';
+    };
+  });
+  document.querySelector('#phaseBtns button').classList.add('active');
+
+  document.querySelectorAll('#vizBtns button').forEach(function(btn){
+    btn.onclick = function(){
+      document.querySelectorAll('#vizBtns button').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      anat.setVizMode(btn.dataset.viz);
+    };
+  });
+  document.querySelector('#vizBtns button').classList.add('active');
+
+  var phaseColors = {MENSTRUAL:'#ef4444',FOLLICULAR:'#10b981',OVULATION:'#f59e0b',LUTEAL:'#8b5cf6'};
+  anat.onCycleDayChange(function(day, phase){
+    document.getElementById('curDay').textContent = day;
+    document.getElementById('curPhase').textContent = phase;
+    document.getElementById('curPhase').style.background = phaseColors[phase];
+    var pct = ((day - 1) / 27) * 100;
+    document.getElementById('cycleMarker').style.left = pct + '%';
+  });
+  document.getElementById('playBtn').onclick = function(){
+    anat.startCycleAnimation();
+    document.getElementById('playBtn').style.display = 'none';
+    document.getElementById('pauseBtn').style.display = 'inline-flex';
+  };
+  document.getElementById('pauseBtn').onclick = function(){
+    anat.stopCycleAnimation();
+    document.getElementById('playBtn').style.display = 'inline-flex';
+    document.getElementById('pauseBtn').style.display = 'none';
+  };
+}
+startAnat();
+</script>
+</body></html>

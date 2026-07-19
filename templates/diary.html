@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Diary - Smart EUG</title>
+<link rel="stylesheet" href="/static/style.css">
+</head><body>
+<div class="card card-glow">
+  <h3 id="t1">Write a diary entry</h3>
+  <div class="card-sub">How do you feel today?</div>
+  <div class="field"><label>One word for today</label><input type="text" id="title" placeholder="Tired, energized, calm..."></div>
+  <div class="field"><label>How was your day?</label><textarea id="body" rows="6" placeholder="Pain, mood, food, sleep, anything..."></textarea></div>
+  <button class="btn" onclick="save()">${''}</button>
+</div>
+<div class="card"><h3 id="t2">Entries</h3><div id="entries"></div></div>
+<script src="/static/widgets.js"></script>
+<script>
+mountShell('diary');
+document.getElementById('main').insertAdjacentHTML('afterbegin', pageHeader('Period Diary', 'Personal journal entries', 'JOURNAL'));
+document.getElementById('t1').innerHTML = `${icon('book')} Write a diary entry`;
+document.getElementById('t2').innerHTML = `${icon('history')} Entries`;
+document.querySelector('button.btn').innerHTML = `${icon('check')} Save`;
+const KEY='malaika_diary';
+function load(){return JSON.parse(localStorage.getItem(KEY)||'[]');}
+function save(){
+  const t=document.getElementById('title').value.trim(),b=document.getElementById('body').value.trim();
+  if(!t||!b){alert('Fill both');return;}
+  const all=load();all.push({title:t,body:b,date:new Date().toLocaleString(),ts:Date.now()});
+  localStorage.setItem(KEY,JSON.stringify(all));
+  document.getElementById('title').value='';document.getElementById('body').value='';render();
+}
+function render(){
+  const all=load();
+  if(!all.length){document.getElementById('entries').innerHTML='<p style="color:var(--muted);padding:14px;text-align:center">No entries yet.</p>';return;}
+  document.getElementById('entries').innerHTML=[...all].reverse().map(e=>`<div style="padding:14px 0;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><strong style="color:var(--pink-dark)">${e.title}</strong><span style="color:var(--muted);font-size:.78rem">${e.date}</span></div><p style="color:var(--text-soft);line-height:1.6;white-space:pre-wrap">${e.body}</p></div>`).join('');
+}
+render();
+</script>
+</body></html>

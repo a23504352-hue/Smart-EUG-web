@@ -1,0 +1,31 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# ---- Databases / local state ----
+db/
+*.db
+*.sqlite
+*.sqlite3
+
+# ---- Large data & recordings (too big for GitHub) ----
+recordings/
+*.mat
+*.csv
+
+# (Allowed dataset/ folder containing txt signal trials)
+
+# ---- Large / generated videos (keep the small promo, ignore the rest) ----
+malaika_v2_website_demo.mp4
+generate_promo_video_ORIGINAL_backup.py
+
+# ---- OS / editor junk ----
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log

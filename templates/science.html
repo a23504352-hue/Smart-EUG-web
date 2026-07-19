@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Science - Smart EUG</title>
+<link rel="stylesheet" href="/static/style.css">
+</head><body>
+<div class="card card-glow"><h3 id="t1">What is EUG?</h3><p style="margin-top:8px;line-height:1.7">EUG (electrouterography) measures tiny electrical signals from the uterus through 3 abdominal electrodes — like ECG measures the heart. During menstruation, these signals are stronger, more rhythmic, and more synchronized across electrodes. Our AI distinguishes menstrual contractions from non-menstrual activity.</p></div>
+<div class="card"><h3 id="t2">7-step AI pipeline</h3>
+<ol style="line-height:1.9;padding-left:24px;margin-top:8px">
+<li><strong>Load</strong> — BIOPAC .txt or .mat or ESP32 stream</li>
+<li><strong>Filter</strong> — 50 Hz notch + 0.1-3 Hz bandpass</li>
+<li><strong>RMS envelope</strong> — 10s smoothing window</li>
+<li><strong>Adaptive threshold</strong> — median + 1.5 × MAD per channel</li>
+<li><strong>Consensus</strong> — at least 2 of 3 channels must agree</li>
+<li><strong>14 features</strong> per contraction</li>
+<li><strong>GradientBoosting model</strong> + per-phase threshold matching</li>
+</ol></div>
+<div class="card"><h3 id="t3">14 scientific features</h3>
+<table><thead><tr><th>#</th><th>Feature</th><th>Meaning</th></tr></thead><tbody>
+<tr><td>1</td><td>duration_s</td><td>Contraction length</td></tr>
+<tr><td>2</td><td>rms_amplitude_uv</td><td>Signal strength</td></tr>
+<tr><td>3</td><td>peak_amplitude_uv</td><td>Maximum spike</td></tr>
+<tr><td>4</td><td>peak_to_peak_uv</td><td>Total range</td></tr>
+<tr><td>5</td><td>amplitude_std_uv</td><td>Variability</td></tr>
+<tr><td>6</td><td>dominant_frequency_hz</td><td>Rhythm speed</td></tr>
+<tr><td>7</td><td>spectral_power_0p1_3hz</td><td>Total band power</td></tr>
+<tr><td>8</td><td>spectral_power_ratio_03_1hz</td><td>Rhythmic ratio</td></tr>
+<tr><td>9</td><td>cross_channel_sync</td><td>Channel correlation</td></tr>
+<tr><td>10</td><td>contraction_regularity_cv</td><td>Inter-contraction variability</td></tr>
+<tr><td>11</td><td>hr_during_bpm</td><td>Heart rate during</td></tr>
+<tr><td>12</td><td>hr_rise_bpm</td><td>HR change vs baseline</td></tr>
+<tr><td>13</td><td>contraction_rate_per_min</td><td>Frequency of contractions</td></tr>
+<tr><td>14</td><td>channel_amplitude_balance</td><td>Sensor symmetry</td></tr>
+</tbody></table></div>
+<div class="card"><h3 id="t4">References</h3>
+<ol style="line-height:1.8;padding-left:24px;font-size:.92rem;color:var(--text-soft)">
+<li>Lucovnik M, et al. <em>Med Eng Phys</em>, 33(6), 2011.</li>
+<li>Devedeux D, et al. <em>Am J Obstet Gynecol</em>, 169(6), 1993.</li>
+<li>Bulletti C, et al. <em>Fertility &amp; Sterility</em>, 74(4), 2000.</li>
+<li>Taggart MJ, et al. <em>J Physiology</em>, 501(Pt 1), 1997.</li>
+<li>Khalil M, Duchene J. <em>IEEE Trans Biomed Eng</em>, 47(6), 2000.</li>
+<li>Horowitz G, et al. <em>Am J Obstet Gynecol</em>, 161(2), 1989.</li>
+</ol></div>
+<script src="/static/widgets.js"></script>
+<script>
+mountShell('science');
+document.getElementById('main').insertAdjacentHTML('afterbegin', pageHeader('Scientific basis', '7-step pipeline · 14 features · references', 'EDUCATION'));
+document.getElementById('t1').innerHTML = `${icon('info')} What is EUG?`;
+document.getElementById('t2').innerHTML = `${icon('zap')} 7-step AI pipeline`;
+document.getElementById('t3').innerHTML = `${icon('flask')} 14 scientific features`;
+document.getElementById('t4').innerHTML = `${icon('book')} References`;
+</script>
+</body></html>

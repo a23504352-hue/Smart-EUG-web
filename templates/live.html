@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Live recording - Smart EUG</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+<style>
+.bigStartCard{display:flex;flex-direction:column;align-items:center;padding:30px;text-align:center}
+.bigStartCard .stage{font-size:.78rem;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase;font-weight:700;margin-bottom:8px}
+.bigStartCard h2{font-size:1.5rem;margin-bottom:14px}
+.connection-card{display:flex;align-items:center;gap:12px;padding:14px;border-radius:12px;background:var(--bg-soft);border:1px solid var(--border);margin-bottom:14px}
+.connection-dot{width:14px;height:14px;border-radius:50%;background:var(--bad)}
+.connection-dot.ok{background:var(--good);box-shadow:0 0 12px rgba(16,185,129,0.6)}
+.preview-verdict{display:inline-block;padding:5px 14px;border-radius:999px;font-size:.82rem;font-weight:700;background:var(--bg-soft)}
+.live-indicators{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.li-item{padding:10px;border-radius:10px;background:var(--bg-soft);text-align:center}
+.li-item .label{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;font-weight:700}
+.li-item .value{font-size:1.1rem;font-weight:800;margin-top:4px}
+.li-item .ok{color:var(--good)} .li-item .warn{color:var(--warn)} .li-item .bad{color:var(--bad)}
+</style>
+</head><body>
+
+<div class="card connection-card" id="connStatus">
+  <div class="connection-dot" id="connDot"></div>
+  <div style="flex:1">
+    <strong id="connTitle">Looking for ESP32...</strong>
+    <div style="color:var(--muted);font-size:.85rem" id="connInfo">Auto-detecting on USB serial ports</div>
+  </div>
+  <button class="btn btn-secondary btn-sm" onclick="connectEsp32()">Reconnect</button>
+</div>
+
+<!-- IDLE / START STAGE -->
+<div class="card bigStartCard" id="stageIdle">
+  <div class="stage">STEP 3 of 3</div>
+  <h2 id="stageH" style="font-weight:800">Stick electrodes on your abdomen, then start</h2>
+  <p style="color:var(--muted);max-width:480px;margin-bottom:18px">3 differential pairs (CH1, CH2, CH3) over the lower abdomen, plus 1 ground reference on the hip. Lie still and breathe normally during the recording.</p>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+      <button class="btn btn-record btn-lg" id="startBtn" disabled>${''}</button>
+      <button class="btn btn-secondary btn-lg" id="demoBtn" style="background:linear-gradient(135deg,#8b5cf6,#a855f7);color:white">${''}</button>
+    </div>
+  <p style="color:var(--muted);font-size:.78rem;margin-top:10px">Recording auto-saves as .mat + .csv + .txt to recordings folder</p>
+</div>
+
+<!-- LIVE RECORDING STAGE (hidden initially) -->
+<div id="stageLive" style="display:none">
+  <div class="card" style="display:flex;justify-content:space-between;align-items:center">
+    <div>
+      <span class="live-pulse">RECORDING</span>
+      <span style="color:var(--muted);font-size:.85rem;margin-left:8px">Duration: <strong id="recTimer" style="color:var(--text)">0:00</strong> &nbsp;·&nbsp; Samples: <strong id="recSamples" style="color:var(--text)">0</strong></span>
+    </div>
+    <button class="btn btn-stop" id="stopBtn">${''}</button>
+  </div>
+
+  <!-- Live indicators row -->
+  <div class="card">
+    <h3 id="indTitle">Live signal indicators</h3>
+    <div class="live-indicators">
+      <div class="li-item">
+        <div class="label">Quality (avg)</div>
+        <div class="value" id="qualityVal">--</div>
+        <div class="quality-bar"><div class="quality-bar-fill" id="qualityFill" style="width:0%"></div></div>
+      </div>
+      <div class="li-item">
+        <div class="label">Electrode contact</div>
+        <div class="value" id="contactVal">checking</div>
+        <div class="contact-dots">
+          <span class="contact-dot" id="dot1" data-label="CH1"></span>
+          <span class="contact-dot" id="dot2" data-label="CH2"></span>
+          <span class="contact-dot" id="dot3" data-label="CH3"></span>
+        </div>
+      </div>
+      <div class="li-item">
+        <div class="label">Live preview verdict</div>
+        <div class="value" id="livePreview">--</div>
+        <div style="color:var(--muted);font-size:.7rem">updates every 5s</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3 separate channel scopes -->
+  <div class="card">
+    <h3 id="ch1Title">CH1 — Channel 1</h3>
+    <div class="scope-channel-label">
+      <span class="name" style="color:#ec4899">CH1 / GPIO 34</span>
+      <span class="value" id="ch1Val">-- µV</span>
+    </div>
+    <canvas id="scope1" class="scope-canvas"></canvas>
+  </div>
+  <div class="card">
+    <h3 id="ch2Title">CH2 — Channel 2</h3>
+    <div class="scope-channel-label">
+      <span class="name" style="color:#8b5cf6">CH2 / GPIO 35</span>
+      <span class="value" id="ch2Val">-- µV</span>
+    </div>
+    <canvas id="scope2" class="scope-canvas"></canvas>
+  </div>
+  <div class="card">
+    <h3 id="ch3Title">CH3 — Channel 3</h3>
+    <div class="scope-channel-label">
+      <span class="name" style="color:#06b6d4">CH3 / GPIO 32</span>
+      <span class="value" id="ch3Val">-- µV</span>
+    </div>
+    <canvas id="scope3" class="scope-canvas"></canvas>
+  </div>
+</div>
+
+<!-- ANALYZING STAGE (hidden initially) -->
+<div id="stageAnalyzing" style="display:none">
+  <div class="card" style="text-align:center">
+    <h3 style="justify-content:center" id="anTitle">Analyzing your recording</h3>
+    <div class="card-sub">Running through 4 stages...</div>
+    <div class="progress-steps">
+      <div class="progress-step" id="step1">
+        <div class="progress-step-num">1</div>
+        <div class="progress-step-text">Saving recording (.mat + .csv + .txt)</div>
+        <div class="progress-step-time">~1s</div>
+      </div>
+      <div class="progress-step" id="step2">
+        <div class="progress-step-num">2</div>
+        <div class="progress-step-text">Extracting 14 features per contraction</div>
+        <div class="progress-step-time">~3s</div>
+      </div>
+      <div class="progress-step" id="step3">
+        <div class="progress-step-num">3</div>
+        <div class="progress-step-text">Running GradientBoosting AI model</div>
+        <div class="progress-step-time">~1s</div>
+      </div>
+      <div class="progress-step" id="step4">
+        <div class="progress-step-num">4</div>
+        <div class="progress-step-text">Computing per-phase thresholds</div>
+        <div class="progress-step-time">~1s</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/widgets.js"></script>
+<script src="/static/live_waveform.js"></script>
+<script>
+mountShell('live');
+document.getElementById('main').insertAdjacentHTML('afterbegin', pageHeader('Live recording', 'Click electrodes on, click START. AI does the rest.', 'HARDWARE'));
+document.getElementById('startBtn').innerHTML = `${icon('circle')} START RECORDING`;
+document.getElementById('demoBtn').innerHTML = `${icon('play')} DEMO MODE (no hardware needed)`;
+document.getElementById('stopBtn').innerHTML = `${icon('square')} STOP & ANALYZE`;
+document.getElementById('indTitle').innerHTML = `${icon('zap')} Live signal indicators`;
+document.getElementById('ch1Title').innerHTML = `${icon('activity')} Channel 1 (CH1)`;
+document.getElementById('ch2Title').innerHTML = `${icon('activity')} Channel 2 (CH2)`;
+document.getElementById('ch3Title').innerHTML = `${icon('activity')} Channel 3 (CH3)`;
+document.getElementById('anTitle').innerHTML = `${icon('brain')} Analyzing your recording`;
+
+let scope1, scope2, scope3;
+let ws = null;
+let recordStartTime = 0;
+let timerInterval = null;
+let livePreviewInterval = null;
+
+async function pollStatus(){
+  try {
+    const r = await fetch('/api/esp32/status');
+    const d = await r.json();
+    const dot = document.getElementById('connDot');
+    const title = document.getElementById('connTitle');
+    const info = document.getElementById('connInfo');
+    if (d.connected){
+      dot.classList.add('ok');
+      title.textContent = `✓ ESP32 connected on ${d.port}`;
+      info.textContent = `Firmware ${d.fw||'?'} · ${d.chip||'ESP32'} · ${d.streaming?'Streaming':'Idle'}`;
+      document.getElementById('startBtn').disabled = false;
+    } else {
+      dot.classList.remove('ok');
+      title.textContent = 'ESP32 not connected';
+      info.textContent = d.last_error || 'Plug in ESP32 via USB and click Reconnect';
+      document.getElementById('startBtn').disabled = true;
+    }
+  } catch(e){}
+}
+
+async function connectEsp32(){
+  await fetch('/api/esp32/connect', {method:'POST'});
+  setTimeout(pollStatus, 800);
+}
+
+function connectWs(){
+  if (ws && ws.readyState === WebSocket.OPEN) return;
+  ws = new WebSocket('ws://' + location.host + '/ws/live');
+  ws.onmessage = ev => {
+    const m = JSON.parse(ev.data);
+    if (m.type === 'samples'){
+      if (scope1) scope1.push(m.ch1);
+      if (scope2) scope2.push(m.ch2);
+      if (scope3) scope3.push(m.ch3);
+      const samplesEl = document.getElementById('recSamples');
+      if (samplesEl) samplesEl.textContent = m.t.length ? m.t[m.t.length-1] : 0;
+    } else if (m.type === 'quality'){
+      const avg = (m.values[0] + m.values[1] + m.values[2]) / 3;
+      const qv = document.getElementById('qualityVal');
+      const qf = document.getElementById('qualityFill');
+      if (qv) {
+        qv.textContent = avg.toFixed(0) + '%';
+        qv.className = 'value ' + (avg>=70?'ok':avg>=40?'warn':'bad');
+      }
+      if (qf) qf.style.width = avg + '%';
+    } else if (m.type === 'contact'){
+      ['1','2','3'].forEach((ch, i) => {
+        const d = document.getElementById('dot'+ch);
+        if (d) d.classList.toggle('ok', m.values[i]);
+      });
+      const ok = m.values.every(v=>v);
+      const cv = document.getElementById('contactVal');
+      if (cv) {
+        cv.textContent = ok ? 'all good' : 'check electrodes';
+        cv.className = 'value ' + (ok?'ok':'warn');
+      }
+    }
+  };
+  ws.onclose = () => setTimeout(connectWs, 2000);
+}
+
+async function startRecording(){
+  const r = await fetch('/api/esp32/start', {method:'POST'});
+  const d = await r.json();
+  if (!d.ok) { alert('Failed to start. Check ESP32 connection.'); return; }
+  document.getElementById('stageIdle').style.display = 'none';
+  document.getElementById('stageLive').style.display = 'block';
+  recordStartTime = Date.now();
+  // init scopes
+  setTimeout(() => {
+    scope1 = new LiveScope('scope1', '#ec4899', 'CH1');
+    scope2 = new LiveScope('scope2', '#8b5cf6', 'CH2');
+    scope3 = new LiveScope('scope3', '#06b6d4', 'CH3');
+    scope1.setValueLabel('ch1Val');
+    scope2.setValueLabel('ch2Val');
+    scope3.setValueLabel('ch3Val');
+  }, 100);
+  // timer
+  timerInterval = setInterval(() => {
+    const t = Math.floor((Date.now() - recordStartTime) / 1000);
+    const m = Math.floor(t / 60), s = t % 60;
+    const tEl = document.getElementById('recTimer');
+    if (tEl) tEl.textContent = m + ':' + String(s).padStart(2,'0');
+  }, 500);
+  connectWs();
+}
+
+async function stopRecording(){
+  clearInterval(timerInterval);
+  clearInterval(livePreviewInterval);
+  document.getElementById('stageLive').style.display = 'none';
+  document.getElementById('stageAnalyzing').style.display = 'block';
+
+  // Animate progress
+  setTimeout(() => activate('step1'), 200);
+
+  try {
+    const r = await fetch('/api/esp32/stop', {method:'POST'});
+    const d = await r.json();
+    setTimeout(() => activate('step2'), 800);
+    setTimeout(() => activate('step3'), 2500);
+    setTimeout(() => activate('step4'), 3500);
+    if (!d.ok || !d.analysis){
+      setTimeout(() => alert('Stop failed: ' + (d.reason||'unknown')), 5000);
+      return;
+    }
+    // Stash analysis result and redirect to /result
+    sessionStorage.setItem('lastAnalysis', JSON.stringify(d.analysis));
+    setTimeout(() => location.href = '/result', 4500);
+  } catch(e){
+    alert('Stop failed: ' + e.message);
+  }
+}
+
+function activate(id){
+  const cur = document.getElementById(id);
+  if (cur) {
+    cur.classList.add('active');
+    setTimeout(() => {cur.classList.remove('active'); cur.classList.add('done'); cur.querySelector('.progress-step-num').textContent='✓';}, 1000);
+  }
+}
+
+document.getElementById('startBtn').onclick = startRecording;
+
+async function startDemoRecording(){
+  const r = await fetch('/api/demo/start', {method:'POST'});
+  const d = await r.json();
+  if (!d.ok) { alert('Demo failed to start'); return; }
+  document.getElementById('stageIdle').style.display = 'none';
+  document.getElementById('stageLive').style.display = 'block';
+  recordStartTime = Date.now();
+  setTimeout(() => {
+    scope1 = new LiveScope('scope1', '#ec4899', 'CH1');
+    scope2 = new LiveScope('scope2', '#8b5cf6', 'CH2');
+    scope3 = new LiveScope('scope3', '#06b6d4', 'CH3');
+    scope1.setValueLabel('ch1Val');
+    scope2.setValueLabel('ch2Val');
+    scope3.setValueLabel('ch3Val');
+  }, 100);
+  timerInterval = setInterval(() => {
+    const t = Math.floor((Date.now() - recordStartTime) / 1000);
+    const m = Math.floor(t / 60), s = t % 60;
+    const tEl = document.getElementById('recTimer');
+    if (tEl) tEl.textContent = m + ':' + String(s).padStart(2,'0');
+  }, 500);
+  // Connect to demo WebSocket
+  if (ws) ws.close();
+  ws = new WebSocket('ws://' + location.host + '/ws/demo');
+  ws.onmessage = ev => {
+    const m = JSON.parse(ev.data);
+    if (m.type === 'samples'){
+      if (scope1) scope1.push(m.ch1);
+      if (scope2) scope2.push(m.ch2);
+      if (scope3) scope3.push(m.ch3);
+      const sEl = document.getElementById('recSamples');
+      if (sEl) sEl.textContent = m.t.length ? m.t[m.t.length-1] : 0;
+    } else if (m.type === 'quality'){
+      const avg = (m.values[0]+m.values[1]+m.values[2])/3;
+      const qv = document.getElementById('qualityVal');
+      const qf = document.getElementById('qualityFill');
+      if (qv) { qv.textContent = avg.toFixed(0)+'%'; qv.className = 'value '+(avg>=70?'ok':avg>=40?'warn':'bad'); }
+      if (qf) qf.style.width = avg + '%';
+    } else if (m.type === 'contact'){
+      ['1','2','3'].forEach((ch,i) => {
+        const d = document.getElementById('dot'+ch);
+        if (d) d.classList.toggle('ok', m.values[i]);
+      });
+      const cv = document.getElementById('contactVal');
+      if (cv) { cv.textContent = 'all good'; cv.className = 'value ok'; }
+    }
+  };
+  // Override the stop button to use demo stop
+  document.getElementById('stopBtn').onclick = stopDemoRecording;
+}
+
+async function stopDemoRecording(){
+  clearInterval(timerInterval);
+  document.getElementById('stageLive').style.display = 'none';
+  document.getElementById('stageAnalyzing').style.display = 'block';
+  setTimeout(() => activate('step1'), 200);
+  try {
+    const r = await fetch('/api/demo/stop', {method:'POST'});
+    const d = await r.json();
+    setTimeout(() => activate('step2'), 800);
+    setTimeout(() => activate('step3'), 2500);
+    setTimeout(() => activate('step4'), 3500);
+    if (!d.ok || !d.analysis){
+      setTimeout(() => alert('Demo stop failed: ' + (d.reason||'unknown')), 5000);
+      return;
+    }
+    sessionStorage.setItem('lastAnalysis', JSON.stringify(d.analysis));
+    setTimeout(() => location.href = '/result', 4500);
+  } catch(e){
+    alert('Demo stop failed: ' + e.message);
+  }
+}
+
+document.getElementById('demoBtn').onclick = startDemoRecording;
+
+document.getElementById('stopBtn').onclick = stopRecording;
+
+pollStatus();
+setInterval(pollStatus, 3000);
+</script>
+</body></html>

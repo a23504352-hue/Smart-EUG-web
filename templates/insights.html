@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EUG Insights - Smart EUG</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+</head><body>
+
+<div class="kpi-grid" id="topKpis"></div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+  <div class="card">
+    <h3 id="t1">Verdict distribution</h3>
+    <div class="card-sub">All your past analyses</div>
+    <div id="verdictPie" style="min-height:280px"></div>
+  </div>
+  <div class="card">
+    <h3 id="t2">Phase distribution</h3>
+    <div class="card-sub">Which cycle phases your recordings landed in</div>
+    <div id="phasePie" style="min-height:280px"></div>
+  </div>
+</div>
+
+<div class="card">
+  <h3 id="t3">Period probability over time</h3>
+  <div class="card-sub">P(period) for each recording, in chronological order</div>
+  <div id="probTimeline" style="min-height:280px"></div>
+</div>
+
+<div class="card">
+  <h3 id="t4">Quality vs probability scatter</h3>
+  <div class="card-sub">High-quality recordings tend to give clearer verdicts</div>
+  <div id="scatter" style="min-height:280px"></div>
+</div>
+
+<div class="card">
+  <h3 id="t5">All recordings</h3>
+  <div id="tbl">Loading...</div>
+</div>
+
+<script src="/static/widgets.js"></script>
+<script>
+mountShell('history');
+document.getElementById('main').insertAdjacentHTML('afterbegin', pageHeader('EUG Insights', 'Aggregated stats across all your recordings', 'ANALYTICS'));
+document.getElementById('t1').innerHTML = `${icon('award')} Verdict distribution`;
+document.getElementById('t2').innerHTML = `${icon('heart')} Phase distribution`;
+document.getElementById('t3').innerHTML = `${icon('trending')} Period probability over time`;
+document.getElementById('t4').innerHTML = `${icon('zap')} Quality vs probability`;
+document.getElementById('t5').innerHTML = `${icon('history')} All recordings`;
+
+(async () => {
+  const r = await fetch('/api/eug_insights');
+  const d = await r.json();
+
+  if (!d.records.length) {
+    document.getElementById('topKpis').innerHTML =
+      '<div class="alert alert-info" style="grid-column:1/-1">No analyses yet. <a href="/upload" style="color:var(--pink-dark)">Upload</a> a file or run a <a href="/live" style="color:var(--pink-dark)">live recording</a>.</div>';
+    return;
+  }
+
+  const s = d.summary;
+  document.getElementById('topKpis').innerHTML = [
+    kpi('Total recordings', s.total, '', '', 'clipboard'),
+    kpi('Period likely', s.period_likely, `of ${s.total}`, s.period_likely > 0 ? 'bad' : '', 'droplet'),
+    kpi('Non-period', s.non_period_likely, `of ${s.total}`, s.non_period_likely > 0 ? 'good' : '', 'apple'),
+    kpi('Avg P(period)', (s.avg_period_probability * 100).toFixed(0) + '%', '', '', 'brain'),
+    kpi('Avg quality', s.avg_quality_score + '/100', '', s.avg_quality_score >= 80 ? 'good' : '', 'award'),
+    kpi('Avg duration', s.avg_duration_min + ' min', '', '', 'activity'),
+  ].join('');
+
+  // Verdict pie
+  const verdictData = {
+    'PERIOD LIKELY': s.period_likely,
+    'NON-PERIOD LIKELY': s.non_period_likely,
+    'AMBIGUOUS': s.ambiguous,
+  };
+  const colors = {'PERIOD LIKELY': '#ef4444', 'NON-PERIOD LIKELY': '#10b981',
+                  'AMBIGUOUS': '#f59e0b', 'INCONCLUSIVE': '#9ca3af'};
+  Plotly.newPlot('verdictPie', [{
+    type: 'pie',
+    labels: Object.keys(verdictData).filter(k => verdictData[k] > 0),
+    values: Object.values(verdictData).filter(v => v > 0),
+    marker: {colors: Object.keys(verdictData).filter(k => verdictData[k] > 0).map(k => colors[k])},
+    textfont: {color: '#fff', size: 14},
+    hole: 0.5,
+  }], {
+    paper_bgcolor: 'rgba(0,0,0,0)', font: {color: '#4b5563'},
+    height: 280, margin: {l: 20, r: 20, t: 10, b: 20},
+  }, {responsive: true, displaylogo: false});
+
+  // Phase pie
+  const phaseColors = {MENSTRUAL:'#ef4444', FOLLICULAR:'#10b981', OVULATION:'#f59e0b',
+                       LUTEAL:'#8b5cf6', UNKNOWN:'#9ca3af'};
+  Plotly.newPlot('phasePie', [{
+    type: 'pie',
+    labels: Object.keys(s.phase_distribution),
+    values: Object.values(s.phase_distribution),
+    marker: {colors: Object.keys(s.phase_distribution).map(k => phaseColors[k] || '#9ca3af')},
+    textfont: {color: '#fff', size: 14},
+    hole: 0.5,
+  }], {
+    paper_bgcolor: 'rgba(0,0,0,0)', font: {color: '#4b5563'},
+    height: 280, margin: {l: 20, r: 20, t: 10, b: 20},
+  }, {responsive: true, displaylogo: false});
+
+  // Probability timeline
+  const sorted = [...d.records].reverse();  // oldest first
+  Plotly.newPlot('probTimeline', [{
+    x: sorted.map(r => new Date(r.ts)),
+    y: sorted.map(r => (r.mean_period_probability || 0) * 100),
+    type: 'scatter', mode: 'lines+markers',
+    line: {color: '#ec4899', width: 2.5},
+    marker: {size: 10, color: sorted.map(r => (r.mean_period_probability || 0) >= 0.65 ? '#ef4444' : (r.mean_period_probability || 0) <= 0.35 ? '#10b981' : '#f59e0b')},
+    fill: 'tozeroy', fillcolor: 'rgba(236,72,153,0.10)',
+  }], {
+    height: 280, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: '#fafbfd',
+    yaxis: {title: 'P(period) %', range: [0, 100], gridcolor: '#e9eaf0'},
+    xaxis: {gridcolor: '#e9eaf0'},
+    shapes: [
+      {type: 'line', x0: sorted[0].ts, x1: sorted[sorted.length - 1].ts, y0: 65, y1: 65,
+       line: {color: '#ef4444', dash: 'dash', width: 1}},
+      {type: 'line', x0: sorted[0].ts, x1: sorted[sorted.length - 1].ts, y0: 35, y1: 35,
+       line: {color: '#10b981', dash: 'dash', width: 1}},
+    ],
+  }, {responsive: true, displaylogo: false});
+
+  // Scatter quality vs probability
+  Plotly.newPlot('scatter', [{
+    x: d.records.map(r => r.scorecard_score || 0),
+    y: d.records.map(r => (r.mean_period_probability || 0) * 100),
+    mode: 'markers',
+    marker: {
+      size: 12,
+      color: d.records.map(r => (r.mean_period_probability || 0) >= 0.65 ? '#ef4444' : (r.mean_period_probability || 0) <= 0.35 ? '#10b981' : '#f59e0b'),
+      line: {color: '#fff', width: 1.5},
+    },
+    text: d.records.map(r => r.filename),
+    hovertemplate: '<b>%{text}</b><br>Quality: %{x}/100<br>P(period): %{y:.0f}%<extra></extra>',
+  }], {
+    height: 280, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: '#fafbfd',
+    xaxis: {title: 'Quality score', range: [0, 100], gridcolor: '#e9eaf0'},
+    yaxis: {title: 'P(period) %', range: [0, 100], gridcolor: '#e9eaf0'},
+  }, {responsive: true, displaylogo: false});
+
+  // Table
+  document.getElementById('tbl').innerHTML = `
+    <table>
+      <thead><tr><th>When</th><th>File</th><th>Duration</th><th>P(period)</th><th>Phase</th><th>Quality</th><th>Verdict</th></tr></thead>
+      <tbody>
+      ${d.records.map(r => {
+        const cls = r.verdict === 'PERIOD LIKELY' ? 'period' : r.verdict === 'NON-PERIOD LIKELY' ? 'nonperiod' : 'info';
+        return `<tr>
+          <td>${new Date(r.ts).toLocaleString()}</td>
+          <td>${r.filename||'?'}</td>
+          <td>${r.duration_min ? r.duration_min.toFixed(1)+'m' : '-'}</td>
+          <td>${r.mean_period_probability != null ? (r.mean_period_probability * 100).toFixed(0)+'%' : '-'}</td>
+          <td>${r.most_likely_phase || '-'}</td>
+          <td>${r.scorecard_score || '-'}/100</td>
+          <td><span class="badge badge-${cls}">${r.verdict||'?'}</span></td>
+        </tr>`;
+      }).join('')}
+      </tbody>
+    </table>`;
+})();
+</script>
+</body></html>

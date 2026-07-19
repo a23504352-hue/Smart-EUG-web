@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Chat - Smart EUG</title>
+<link rel="stylesheet" href="/static/style.css">
+</head><body>
+
+<div class="card" style="display:flex;align-items:center;gap:14px">
+  <div style="width:54px;height:54px;border-radius:50%;background:var(--gradient);display:flex;align-items:center;justify-content:center;color:white;font-size:1.4rem">M</div>
+  <div style="flex:1">
+    <strong style="font-size:1.1rem">SMART EUG AI</strong>
+    <div style="color:var(--muted);font-size:.85rem" id="aiStatus">Initializing...</div>
+  </div>
+</div>
+
+<div class="chat-container">
+  <div class="chat-messages" id="messages">
+    <div class="chat-msg ai">Hi 🌸 I'm Smart EUG — your private women's health assistant. I can answer anything about your cycle, EUG signals, contractions, period care, fertility, or how this app works. What would you like to know?</div>
+  </div>
+  <div class="chat-input-row">
+    <input type="text" id="chatInput" placeholder="Ask anything..." />
+    <button class="btn" onclick="sendMsg()" id="sendBtn">${''}</button>
+  </div>
+</div>
+
+<div class="card">
+  <h3 id="suggTitle">Quick suggestions</h3>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
+    <button class="btn btn-secondary btn-sm" onclick="quickAsk('What is EUG and how does it work?')">What is EUG?</button>
+    <button class="btn btn-secondary btn-sm" onclick="quickAsk('What does cross_channel_sync mean?')">Explain cross-channel sync</button>
+    <button class="btn btn-secondary btn-sm" onclick="quickAsk('What should I eat during my period?')">Period nutrition</button>
+    <button class="btn btn-secondary btn-sm" onclick="quickAsk('Why is my pain at 8/10? Should I see a doctor?')">Severe pain advice</button>
+    <button class="btn btn-secondary btn-sm" onclick="quickAsk('How do I prepare for an EUG recording?')">How to record</button>
+    <button class="btn btn-secondary btn-sm" onclick="quickAsk('Tell me about ovulation')">Ovulation</button>
+    <button class="btn btn-secondary btn-sm" onclick="quickAsk('What is AUC and why does it matter?')">What is AUC?</button>
+    <button class="btn btn-secondary btn-sm" onclick="quickAsk('Tell me about luteal phase')">Luteal phase</button>
+  </div>
+</div>
+
+<script src="/static/widgets.js"></script>
+<script>
+mountShell('chat');
+document.getElementById('main').insertAdjacentHTML('afterbegin', pageHeader('AI Chat', 'Ask anything about your cycle, signals, or wellness', 'AI'));
+document.getElementById('sendBtn').innerHTML = `${icon('send')} Send`;
+document.getElementById('suggTitle').innerHTML = `${icon('zap')} Quick suggestions`;
+
+const history = [];
+
+(async()=>{
+  try {
+    const r = await fetch('/api/chat/status');
+    const d = await r.json();
+    document.getElementById('aiStatus').textContent =
+      d.ollama_available ? '✓ Ollama AI online · powerful + private' : '✓ Ready · using rule-based fallback (Ollama not detected)';
+  } catch(e){
+    document.getElementById('aiStatus').textContent = '⚠ Backend not reachable';
+  }
+})();
+
+function addMsg(text, who){
+  const m = document.getElementById('messages');
+  const d = document.createElement('div');
+  d.className = 'chat-msg ' + who;
+  d.textContent = text;
+  m.appendChild(d);
+  m.scrollTop = m.scrollHeight;
+  return d;
+}
+
+async function sendMsg(){
+  const inp = document.getElementById('chatInput');
+  const q = inp.value.trim();
+  if (!q) return;
+  inp.value = '';
+  document.getElementById('sendBtn').disabled = true;
+  addMsg(q, 'user');
+  history.push({role:'user', content:q});
+
+  const typing = addMsg('thinking...', 'ai typing');
+  try {
+    const r = await fetch('/api/chat', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({message:q, history: history.slice(-10)}),
+    });
+    const d = await r.json();
+    typing.classList.remove('typing');
+    typing.textContent = d.reply || '...';
+    history.push({role:'assistant', content:d.reply});
+  } catch(e){
+    typing.classList.remove('typing');
+    typing.textContent = 'Sorry, error: ' + e.message;
+  } finally {
+    document.getElementById('sendBtn').disabled = false;
+    inp.focus();
+  }
+}
+function quickAsk(q){
+  document.getElementById('chatInput').value = q;
+  sendMsg();
+}
+document.getElementById('chatInput').addEventListener('keypress', e=>{ if (e.key==='Enter') sendMsg(); });
+</script>
+</body></html>

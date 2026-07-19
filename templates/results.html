@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Model performance - Smart EUG</title>
+<link rel="stylesheet" href="/static/style.css">
+</head><body>
+<div class="kpi-grid" id="kpis"></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+  <div class="card"><h3 id="t1">ROC Curve</h3><img src="/api/training_image/roc_curve.png" style="width:100%;border-radius:10px;background:#fff"></div>
+  <div class="card"><h3 id="t2">Confusion Matrix</h3><img src="/api/training_image/confusion_matrix.png" style="width:100%;border-radius:10px;background:#fff"></div>
+</div>
+<div class="card"><h3 id="t3">Feature importance</h3><img src="/api/training_image/feature_importance.png" style="width:100%;border-radius:10px;background:#fff"></div>
+<script src="/static/widgets.js"></script>
+<script>
+mountShell('results');
+document.getElementById('main').insertAdjacentHTML('afterbegin', pageHeader('Model performance', 'GradientBoosting · 5-fold CV', 'CLINICAL'));
+document.getElementById('t1').innerHTML = `${icon('trending')} ROC Curve`;
+document.getElementById('t2').innerHTML = `${icon('check')} Confusion Matrix`;
+document.getElementById('t3').innerHTML = `${icon('zap')} Feature Importance`;
+(async()=>{
+  const r=await fetch('/api/model_info');const d=await r.json();const m=d.metrics||{};
+  document.getElementById('kpis').innerHTML=[
+    kpi('Mean fold AUC',(m.fold_mean_auc||0).toFixed(3),'std '+(m.fold_std_auc||0).toFixed(3),'good','award'),
+    kpi('Accuracy',((m.accuracy||0)*100).toFixed(1)+'%','OOF','','check'),
+    kpi('F1 Score',(m.f1||0).toFixed(3),'Balanced','','trending'),
+    kpi('Precision',(m.precision||0).toFixed(3),'','','zap'),
+    kpi('Recall',(m.recall||0).toFixed(3),'','','activity'),
+    kpi('Features',d.n_features||14,'per contraction','','flask'),
+  ].join('');
+})();
+</script>
+</body></html>
